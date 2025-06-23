@@ -332,7 +332,8 @@
                         tileElement.classList.add('blank');
                     } else {
                         const img = document.createElement('img');
-                        img.src = `/split_images/${tileValue}.png`;
+                        // Path adjusted for Flask's static file handling
+                        img.src = `/static/split_images/${tileValue}.png`;
                         img.alt = `Tile ${tileValue}`;
                         tileElement.appendChild(img);
                         tileElement.addEventListener('click', () => handleTileClick(r, c));
