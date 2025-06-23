@@ -332,7 +332,7 @@
                         tileElement.classList.add('blank');
                     } else {
                         const img = document.createElement('img');
-                        img.src = `split_images/${tileValue}.png`;
+                        img.src = `/split_images/${tileValue}.png`;
                         img.alt = `Tile ${tileValue}`;
                         tileElement.appendChild(img);
                         tileElement.addEventListener('click', () => handleTileClick(r, c));
