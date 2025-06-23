@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Letter for You</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Google Fonts: Playfair Display -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+
+    <!-- Custom Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'sage': '#CCD5AE',
+                        'eggshell': '#E9EDC9',
+                        'cream': '#FEFAE0',
+                        'peach': '#FAEDCD',
+                        'tan': '#D4A373',
+                        'terracotta-red': '#B85042',
+                    },
+                    fontFamily: {
+                        'serif': ['Playfair Display', 'serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        /* The main wrapper centers everything and creates the 3D space */
+        .envelope-wrapper {
+            position: relative;
+            width: 32rem; /* 512px */
+            height: 20rem; /* 320px */
+            max-width: 90vw;
+            max-height: 56.25vw;
+            margin: auto;
+            perspective: 1000px;
+        }
+        /* Common style for all envelope parts */
+        .envelope-part {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+            will-change: transform; /* Performance hint for animations */
+        }
+        .envelope-back {
+            background-color: #E9EDC9; /* eggshell */
+            z-index: 0;
+        }
+        .flap {
+            background-color: #D4A373; /* tan */
+            overflow: hidden;
+        }
+        .flap::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: #E9EDC9; /* eggshell */
+            transform: scale(0.95);
+        }
+        .flap-left { clip-path: polygon(0% 0%, 50% 50%, 0% 100%); z-index: 2; }
+        .flap-left::before { clip-path: polygon(0% 0%, 50% 50%, 0% 100%); }
+        .flap-right { clip-path: polygon(100% 0%, 50% 50%, 100% 100%); z-index: 2; }
+        .flap-right::before { clip-path: polygon(100% 0%, 50% 50%, 100% 100%); }
+        .flap-bottom { clip-path: polygon(0% 100%, 50% 50%, 100% 100%); z-index: 3; }
+        .flap-bottom::before { clip-path: polygon(0% 100%, 50% 50%, 100% 100%); }
+        .flap-top {
+            clip-path: polygon(0% 0%, 50% 50%, 100% 0%);
+            transform-origin: top;
+            z-index: 3;
+            transition: transform 0.7s ease-in-out, z-index 0s 0.7s;
+        }
+        .flap-top::before { clip-path: polygon(0% 0%, 50% 50%, 100% 0%); }
+        /* .heart-seal {
+            background-color: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 4;
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+            box-shadow: none;
+        } */
+
+        /* This is the paper that stays behind and animates its size */
+        .letter-clone {
+            position: absolute;
+            background-color: #FEFAE0; /* cream */
+            border-radius: 12px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+            /* Animate width, height, and position instead of transform */
+            transition: width 0.8s, height 0.8s, top 0.8s, left 0.8s;
+            transition-timing-function: cubic-bezier(0.68, -0.55, 0.27, 1.55); /* Bounce effect */
+        }
+
+        /* Wrapper for the content that fades in */
+        .content-wrapper {
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transition: opacity 0.6s ease-in-out;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .content-wrapper.visible { opacity: 1; }
+
+        .letter-content {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 2rem;
+            position: relative; /* Needed for page positioning */
+            overflow: hidden; /* Hide sliding pages */
+        }
+
+        /* --- PAGE SLIDING ANIMATION --- */
+        .page {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            /* Default state is off-screen to the right */
+            transform: translateX(100%);
+            transition: transform 0.6s cubic-bezier(0.45, 0, 0.55, 1);
+        }
+        .page.active {
+            /* Active page is centered */
+            transform: translateX(0);
+        }
+        .page.prev {
+            /* Pages that have been passed are off-screen to the left */
+            transform: translateX(-100%);
+        }
+
+        .pagination-controls {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 1rem 1rem;
+            box-sizing: border-box;
+        }
+        .page-btn {
+            background: none; border: none; cursor: pointer; color: #D4A373; transition: color 0.3s;
+        }
+        .page-btn:hover:not(:disabled) { color: #B85042; }
+        .page-btn:disabled { color: #CCD5AE; cursor: not-allowed; }
+
+        /* ---- ANIMATION STATES ---- */
+        .flap-top.open { transform: rotateX(180deg); z-index: 0; }
+        .heart-seal.open { opacity: 0; transform: scale(0.5); }
+        .fall {
+             transition: transform 1.5s cubic-bezier(0.95, 0.05, 0.795, 0.035);
+             transform: translateY(150vh);
+        }
+        .flap-top.fall { transform: translateY(150vh) rotateX(180deg); }
+    </style>
+</head>
+<body class="bg-peach font-serif antialiased overflow-hidden">
+
+    <div class="min-h-screen flex items-center justify-center">
+        <div id="envelope-wrapper" class="envelope-wrapper cursor-pointer">
+            <!-- Envelope parts -->
+            <div id="envelope-back" class="envelope-part envelope-back"></div>
+            <div id="flap-left" class="envelope-part flap flap-left"></div>
+            <div id="flap-right" class="envelope-part flap flap-right"></div>
+            <div id="flap-bottom" class="envelope-part flap flap-bottom"></div>
+            <div id="flap-top" class="envelope-part flap flap-top"></div>
+            <div id="heart" class="envelope-part heart-seal">
+                <svg class="w-20 h-20 text-terracotta-red" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"></path></svg>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const wrapper = document.getElementById('envelope-wrapper');
+        const flapTop = document.getElementById('flap-top');
+        const heart = document.getElementById('heart');
+
+        const fallingParts = Array.from(document.querySelectorAll('.envelope-part'));
+
+        const pageContents = [
+            "page 1",
+            "page 2",
+            "page 3",
+            "page 4",
+            "page 5",
+        ];
+        let currentPage = 0;
+        let isOpen = false;
+
+        wrapper.addEventListener('click', () => {
+            if (isOpen) return;
+            isOpen = true;
+
+            wrapper.classList.remove('cursor-pointer');
+
+            // 1. Create a BLANK paper clone. It starts at the same size as the envelope.
+            const letterClone = document.createElement('div');
+            letterClone.className = 'letter-clone';
+            letterClone.style.top = '0';
+            letterClone.style.left = '0';
+            letterClone.style.width = '100%';
+            letterClone.style.height = '100%';
+            wrapper.appendChild(letterClone);
+
+            // 2. Animate the envelope opening.
+            flapTop.classList.add('open');
+            heart.classList.add('open');
+
+            // 3. After opening, make all original parts fall away.
+            setTimeout(() => {
+                fallingParts.forEach(part => part.classList.add('fall'));
+
+                setTimeout(() => {
+                    fallingParts.forEach(part => part.style.display = 'none');
+                }, 1500);
+
+            }, 700);
+
+            // 4. After the fall, animate the size of the BLANK paper.
+            setTimeout(() => {
+                const finalWidthRem = 80; // Target width in rem (32 * 2.5)
+                const finalHeightRem = 50; // Target height in rem (20 * 2.5)
+                const initialWidthRem = 32;
+                const initialHeightRem = 20;
+
+                letterClone.style.width = `${finalWidthRem}rem`;
+                letterClone.style.height = `${finalHeightRem}rem`;
+                // Adjust top/left to make it grow from the center
+                letterClone.style.top = `-${(finalHeightRem - initialHeightRem) / 2}rem`;
+                letterClone.style.left = `-${(finalWidthRem - initialWidthRem) / 2}rem`;
+            }, 2200); // 700ms (open) + 1500ms (fall)
+
+            // 5. AFTER resizing, create and fade in the content.
+            setTimeout(() => {
+                const contentWrapper = document.createElement('div');
+                contentWrapper.className = 'content-wrapper';
+
+                let pagesHTML = pageContents.map((content, index) =>
+                    `<div class="page">
+                        <p class="text-4xl italic text-tan drop-shadow-lg">${content}</p>
+                    </div>`
+                ).join('');
+
+                contentWrapper.innerHTML = `
+                    <div class="letter-content">${pagesHTML}</div>
+                    <div class="pagination-controls">
+                        <button class="page-btn" id="prev-btn">
+                            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                        </button>
+                        <span id="page-indicator" class="text-tan text-lg"></span>
+                        <button class="page-btn" id="next-btn">
+                            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </button>
+                    </div>
+                `;
+
+                letterClone.appendChild(contentWrapper);
+                setTimeout(() => contentWrapper.classList.add('visible'), 50);
+
+                const prevButton = document.getElementById('prev-btn');
+                const nextButton = document.getElementById('next-btn');
+                const pageIndicator = document.getElementById('page-indicator');
+                const pages = letterClone.querySelectorAll('.page');
+
+                function updatePaging() {
+                    pages.forEach((page, index) => {
+                        page.classList.remove('active', 'prev');
+                        if (index === currentPage) {
+                            page.classList.add('active');
+                        } else if (index < currentPage) {
+                            page.classList.add('prev');
+                        }
+                    });
+                    pageIndicator.textContent = `${currentPage + 1} / ${pageContents.length}`;
+                    prevButton.disabled = currentPage === 0;
+                    nextButton.disabled = currentPage === pageContents.length - 1;
+                }
+
+                prevButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (currentPage > 0) {
+                        currentPage--;
+                        updatePaging();
+                    }
+                });
+
+                nextButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (currentPage < pageContents.length - 1) {
+                        currentPage++;
+                        updatePaging();
+                    }
+                });
+
+                updatePaging(); // Initial setup
+            }, 3000); // 2200ms (resize start) + 800ms (resize duration)
+        });
+    </script>
+
+</body>
+</html>
