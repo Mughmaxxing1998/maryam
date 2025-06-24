@@ -198,8 +198,10 @@
             background-color: #FEFAE0; /* cream */
             border-radius: 4px;
             cursor: pointer;
-            transition: transform 0.2s ease-in-out;
             overflow: hidden; /* Ensure images don't spill out */
+            position: absolute; /* For smooth animation using transform */
+            transition: transform 0.3s ease-in-out; /* Animation for movement */
+            will-change: transform; /* Performance hint */
         }
         .game-tile img {
             width: 100%;
@@ -320,47 +322,187 @@
 
 
         function renderBoard(container) {
-            container.innerHTML = ''; // Clear previous board
-            container.style.display = 'grid'; // Ensure grid display
+            // container.innerHTML = ''; // No longer clearing and rebuilding everything
+            // container.style.display = 'grid'; // This is set in CSS, but we need to ensure it's relative for absolute children
+            container.style.position = 'relative'; // Ensure container can anchor absolute tiles
 
-            for (let r = 0; r < GRID_SIZE; r++) {
-                for (let c = 0; c < GRID_SIZE; c++) {
-                    const tileValue = board[r][c];
-                    const tileElement = document.createElement('div');
-                    tileElement.classList.add('game-tile');
-                    if (tileValue === 0) {
-                        tileElement.classList.add('blank');
-                    } else {
-                        const img = document.createElement('img');
-                        // Path adjusted for Flask's static file handling
-                        img.src = `/static/split_images/${tileValue}.png`;
-                        img.alt = `Tile ${tileValue}`;
-                        tileElement.appendChild(img);
-                        tileElement.addEventListener('click', () => handleTileClick(r, c));
+            const tileElements = {}; // To store references to DOM elements for animation
+
+            // Calculate tile size based on container dimensions
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+            // Assuming gap is 5px as per CSS, and padding is 5px on each side of container
+            const totalGapWidth = 5 * (GRID_SIZE - 1);
+            const totalPaddingWidth = 5 * 2;
+            const tileWidth = (containerWidth - totalGapWidth - totalPaddingWidth) / GRID_SIZE;
+            const tileHeight = (containerHeight - totalGapWidth - totalPaddingWidth) / GRID_SIZE;
+            const gap = 5; // as defined in CSS for .game-container gap
+
+            if (container.children.length === 0) { // Initial render
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        const tileValue = board[r][c];
+                        const tileElement = document.createElement('div');
+                        tileElement.classList.add('game-tile');
+                        tileElement.dataset.value = tileValue; // Store value for identification
+                        tileElement.dataset.row = r;
+                        tileElement.dataset.col = c;
+
+                        // Set initial position using transform
+                        const xPos = c * (tileWidth + gap) + gap; // Add initial gap for first column
+                        const yPos = r * (tileHeight + gap) + gap; // Add initial gap for first row
+                        tileElement.style.width = `${tileWidth}px`;
+                        tileElement.style.height = `${tileHeight}px`;
+                        tileElement.style.transform = `translate(${xPos}px, ${yPos}px)`;
+
+                        if (tileValue === 0) {
+                            tileElement.classList.add('blank');
+                            tileElements[`blank`] = tileElement; // Store blank tile separately
+                        } else {
+                            const img = document.createElement('img');
+                            img.src = `/static/split_images/${tileValue}.png`;
+                            img.alt = `Tile ${tileValue}`;
+                            tileElement.appendChild(img);
+                            tileElement.addEventListener('click', () => handleTileClick(parseInt(tileElement.dataset.row), parseInt(tileElement.dataset.col)));
+                            tileElements[`tile-${tileValue}`] = tileElement;
+                        }
+                        container.appendChild(tileElement);
                     }
-                    container.appendChild(tileElement);
+                }
+            } else { // Subsequent updates (after a move) - only update positions
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        const tileValue = board[r][c];
+                        let tileElement;
+                        if (tileValue === 0) {
+                            tileElement = container.querySelector(`.game-tile[data-value="0"]`);
+                             if (!tileElement) { // Should not happen if blank tile always exists
+                                console.error("Blank tile DOM element not found during update!");
+                                tileElement = container.querySelector(`.blank`); // Fallback
+                            }
+                        } else {
+                            tileElement = container.querySelector(`.game-tile[data-value="${tileValue}"]`);
+                        }
+
+                        if (tileElement) {
+                            const xPos = c * (tileWidth + gap) + gap;
+                            const yPos = r * (tileHeight + gap) + gap;
+                            tileElement.style.transform = `translate(${xPos}px, ${yPos}px)`;
+                            tileElement.dataset.row = r; // Update data attributes
+                            tileElement.dataset.col = c;
+
+                            // Ensure click listeners are correct, especially if we were to re-assign blank status
+                            if (tileValue !== 0 && !tileElement.onclick) {
+                                tileElement.addEventListener('click', () => handleTileClick(r,c));
+                            } else if (tileValue === 0 && tileElement.onclick) {
+                                tileElement.onclick = null; // Remove click from new blank
+                            }
+                        } else {
+                             console.error(`Tile element for value ${tileValue} not found during update! Board:`, board);
+                        }
+                    }
                 }
             }
+
             if (checkWinCondition()) {
-                displayWinMessage(container.parentElement); // Assuming container is inside the page div
+                displayWinMessage(container.parentElement);
             }
         }
 
+        let isAnimating = false; // Flag to prevent multiple clicks during animation
+
         function handleTileClick(r, c) {
-            // Check if clicked tile is adjacent to blank space
+            if (isAnimating) return; // Don't process clicks if animation is in progress
+
             const dr = Math.abs(r - blankPos.row);
             const dc = Math.abs(c - blankPos.col);
 
             if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
-                // Swap tile with blank space
-                board[blankPos.row][blankPos.col] = board[r][c];
-                board[r][c] = 0; // New blank position
-                blankPos = { row: r, col: c };
+                isAnimating = true;
 
                 const gameContainer = document.querySelector('#game-of-15-placeholder .game-container');
-                if (gameContainer) {
+                const clickedTileValue = board[r][c];
+
+                // Find DOM elements
+                const clickedTileElement = gameContainer.querySelector(`.game-tile[data-value="${clickedTileValue}"]`);
+                const blankTileElement = gameContainer.querySelector(`.game-tile.blank`);
+
+                if (!clickedTileElement || !blankTileElement) {
+                    console.error("Could not find tile elements for animation. Re-rendering.", clickedTileValue, blankPos);
+                    // Fallback to full re-render if elements are not found (should not happen)
+                    board[blankPos.row][blankPos.col] = board[r][c];
+                    board[r][c] = 0;
+                    blankPos = { row: r, col: c };
                     renderBoard(gameContainer);
+                    isAnimating = false;
+                    return;
                 }
+
+                // Calculate new positions for transform
+                const tileWidth = clickedTileElement.offsetWidth;
+                const tileHeight = clickedTileElement.offsetHeight;
+                const gap = 5; // sync with CSS
+
+                const newClickedX = blankPos.col * (tileWidth + gap) + gap;
+                const newClickedY = blankPos.row * (tileHeight + gap) + gap;
+
+                const newBlankX = c * (tileWidth + gap) + gap;
+                const newBlankY = r * (tileHeight + gap) + gap;
+
+                // Apply transforms to animate
+                clickedTileElement.style.transform = `translate(${newClickedX}px, ${newClickedY}px)`;
+                blankTileElement.style.transform = `translate(${newBlankX}px, ${newBlankY}px)`;
+
+                // Update data attributes for position
+                const oldBlankRow = blankPos.row;
+                const oldBlankCol = blankPos.col;
+
+                // After animation, update the board array and data attributes
+                setTimeout(() => {
+                    // Update board array
+                    board[oldBlankRow][oldBlankCol] = clickedTileValue;
+                    board[r][c] = 0;
+
+                    // Update blankPos
+                    blankPos = { row: r, col: c };
+
+                    // Update data attributes and classes
+                    clickedTileElement.dataset.row = oldBlankRow;
+                    clickedTileElement.dataset.col = oldBlankCol;
+
+                    blankTileElement.dataset.row = r;
+                    blankTileElement.dataset.col = c;
+
+                    // Swap classes and click handlers (conceptually)
+                    // The blank tile becomes the image tile, the image tile becomes blank.
+                    // For simplicity with current renderBoard, we'll just re-render relevant parts or ensure data is fine
+                    // For now, the `renderBoard` on next click isn't called, so we must ensure state is correct
+                    // The `blank` class and `img` content effectively "move" with the logical tile
+                    // Let's ensure the DOM reflects the logical board for the next click's querySelector logic
+
+                    // The tile that *was* blank now gets the image and click listener
+                    blankTileElement.classList.remove('blank');
+                    const img = document.createElement('img');
+                    img.src = `/static/split_images/${clickedTileValue}.png`;
+                    img.alt = `Tile ${clickedTileValue}`;
+                    blankTileElement.innerHTML = ''; // Clear any old content
+                    blankTileElement.appendChild(img);
+                    blankTileElement.dataset.value = clickedTileValue; // It's no longer blank (value 0)
+                    blankTileElement.addEventListener('click', () => handleTileClick(oldBlankRow, oldBlankCol));
+
+
+                    // The tile that *was* clicked (and had an image) becomes blank
+                    clickedTileElement.classList.add('blank');
+                    clickedTileElement.innerHTML = ''; // Remove image
+                    clickedTileElement.dataset.value = 0; // It's now blank
+                    clickedTileElement.onclick = null; // Remove its click listener
+
+                    isAnimating = false;
+                    if (checkWinCondition()) {
+                         displayWinMessage(gameContainer.parentElement);
+                    }
+
+                }, 300); // Corresponds to CSS transition duration
             }
         }
 
