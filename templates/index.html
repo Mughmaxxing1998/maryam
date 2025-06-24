@@ -176,18 +176,19 @@
 
         /* --- GAME OF 15 STYLES --- */
         .game-container {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            grid-template-rows: repeat(4, 1fr);
+            /* display: grid; -- Removed as children are position: absolute */
+            /* grid-template-columns: repeat(4, 1fr); -- Removed */
+            /* grid-template-rows: repeat(4, 1fr); -- Removed */
+            /* gap: 5px; -- Gap is now handled by JS positioning logic */
             width: 90%; /* Adjust as needed */
             max-width: 400px; /* Max size of the game */
             aspect-ratio: 1 / 1; /* Keep it square */
-            gap: 5px;
-            padding: 5px;
+            padding: 5px; /* Padding remains, used in JS calculations */
             background-color: #D4A373; /* tan */
             border-radius: 8px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
             margin: auto; /* Center in the page content area */
+            position: relative; /* Ensures it's the positioning context for absolute tiles. JS also sets this, but good to have in CSS. */
         }
         .game-tile {
             width: 100%;
