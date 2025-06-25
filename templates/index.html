@@ -135,6 +135,7 @@
             width: 100%;
             height: 100%;
             display: flex;
+            flex-direction: column; /* Allow items to stack vertically */
             align-items: center;
             justify-content: center;
             padding: 2rem;
@@ -175,20 +176,28 @@
         .flap-top.fall { transform: translateY(150vh) rotateX(180deg); }
 
         /* --- GAME OF 15 STYLES --- */
+        .game-title {
+            font-family: 'Playfair Display', serif;
+            color: #D4A373;
+            font-size: 2.25rem; /* text-4xl */
+            font-style: italic;
+            margin-bottom: 1.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+
         .game-container {
-            /* display: grid; -- Removed as children are position: absolute */
-            /* grid-template-columns: repeat(4, 1fr); -- Removed */
-            /* grid-template-rows: repeat(4, 1fr); -- Removed */
-            /* gap: 5px; -- Gap is now handled by JS positioning logic */
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
             width: 90%; /* Adjust as needed */
             max-width: 400px; /* Max size of the game */
             aspect-ratio: 1 / 1; /* Keep it square */
-            padding: 5px; /* Padding remains, used in JS calculations */
+            gap: 5px;
+            padding: 5px;
             background-color: #D4A373; /* tan */
             border-radius: 8px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-            margin: auto; /* Center in the page content area */
-            position: relative; /* Ensures it's the positioning context for absolute tiles. JS also sets this, but good to have in CSS. */
+            margin-bottom: 1.5rem; /* Space between game and buttons */
         }
         .game-tile {
             width: 100%;
@@ -199,33 +208,49 @@
             background-color: #FEFAE0; /* cream */
             border-radius: 4px;
             cursor: pointer;
+            transition: transform 0.2s ease-in-out; /* This enables the animation */
             overflow: hidden; /* Ensure images don't spill out */
-            position: absolute; /* For smooth animation using transform */
-            transition: transform 0.3s ease-in-out; /* Animation for movement */
-            will-change: transform; /* Performance hint */
         }
         .game-tile img {
             width: 100%;
             height: 100%;
             object-fit: cover; /* Cover the tile area */
+            /* --- ADDED STYLES TO PREVENT DRAGGING/HIGHLIGHTING --- */
+            -webkit-user-select: none; /* Safari */
+            -moz-user-select: none;    /* Firefox */
+            -ms-user-select: none;     /* IE10+/Edge */
+            user-select: none;         /* Standard */
+            pointer-events: none;      /* Prevent direct interaction with the image itself */
         }
         .game-tile.blank {
             background-color: #CCD5AE; /* sage, or a slightly darker shade of game-container */
             cursor: default;
         }
         .win-message {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: rgba(0,0,0,0.7);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            font-size: 1.5rem;
-            text-align: center;
-            z-index: 100; /* Make sure it's on top */
+            margin-top: 1.5rem; /* Space between reset button and message */
         }
+
+        .game-controls {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+        }
+        .game-button {
+            font-family: 'Playfair Display', serif;
+            color: #D4A373;
+            background-color: #FEFAE0;
+            padding: 0.5rem 1.5rem;
+            border-radius: 9999px;
+            border: 2px solid #D4A373;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .game-button:hover {
+            background-color: #D4A373;
+            color: #FEFAE0;
+        }
+
     </style>
 </head>
 <body class="bg-peach font-serif antialiased overflow-hidden">
@@ -252,7 +277,14 @@
         const fallingParts = Array.from(document.querySelectorAll('.envelope-part'));
 
         const pageContents = [
-            "<div id='game-of-15-placeholder'></div>", // Placeholder for the game
+             // --- MODIFIED GAME PAGE STRUCTURE ---
+            `
+                <h2 class="game-title">LOBSTAR!!!</h2>
+                <div id='game-of-15-placeholder'></div>
+                <div class="game-controls">
+                    <button id="reset-btn" class="game-button">Reset</button>
+                </div>
+            `,
             "This is the second page, after the puzzle!",
             "More content can go here...",
             "And here as well.",
@@ -260,16 +292,16 @@
         ];
         let currentPage = 0;
         let isOpen = false;
-        let gameInitialized = false; // Flag to ensure game is initialized only once
+        let gameInitialized = false;
 
         // --- GAME OF 15 LOGIC ---
         const GRID_SIZE = 4;
-        let board = []; // 2D array representing the board state
+        let board = [];
         let blankPos = { row: -1, col: -1 };
 
         function countInversions(arr) {
             let inversions = 0;
-            const flatArr = arr.filter(num => num !== 0); // Exclude blank (0)
+            const flatArr = arr.filter(num => num !== 0);
             for (let i = 0; i < flatArr.length - 1; i++) {
                 for (let j = i + 1; j < flatArr.length; j++) {
                     if (flatArr[i] > flatArr[j]) {
@@ -281,34 +313,25 @@
         }
 
         function isSolvable(tiles, blankRow) {
-            // tiles is a 1D array of numbers, 0 represents blank
             const inversions = countInversions(tiles);
-            // Grid width is GRID_SIZE (4, which is even)
-            // If grid width is even:
-            //   - An odd number of inversions means the blank is on an even row from the bottom (counting 1-up).
-            //   - An even number of inversions means the blank is on an odd row from the bottom (counting 1-up).
             const blankRowFromBottom = GRID_SIZE - blankRow;
-            if (inversions % 2 !== 0) { // Odd inversions
-                return blankRowFromBottom % 2 === 0; // Blank on even row from bottom
-            } else { // Even inversions
-                return blankRowFromBottom % 2 !== 0; // Blank on odd row from bottom
+            if (inversions % 2 !== 0) {
+                return blankRowFromBottom % 2 === 0;
+            } else {
+                return blankRowFromBottom % 2 !== 0;
             }
         }
 
         function shuffleBoard() {
             let tiles = Array.from({ length: GRID_SIZE * GRID_SIZE - 1 }, (_, i) => i + 1);
-            tiles.push(0); // 0 represents the blank space
+            tiles.push(0);
 
             do {
-                // Fisher-Yates shuffle
                 for (let i = tiles.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
                     [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
                 }
-                // Find blank position for solvability check
                 const blankIndex = tiles.indexOf(0);
-                const tempBlankPos = { row: Math.floor(blankIndex / GRID_SIZE), col: blankIndex % GRID_SIZE };
-                // console.log("Trying shuffle, blank at:", tempBlankPos, "Inversions:", countInversions(tiles));
             } while (!isSolvable(tiles, Math.floor(tiles.indexOf(0) / GRID_SIZE)));
 
             board = [];
@@ -318,201 +341,73 @@
 
             const blankIndex = tiles.indexOf(0);
             blankPos = { row: Math.floor(blankIndex / GRID_SIZE), col: blankIndex % GRID_SIZE };
-            // console.log("Solvable shuffle found:", board, "Blank at:", blankPos);
         }
 
 
         function renderBoard(container) {
-            // container.innerHTML = ''; // No longer clearing and rebuilding everything
-            // container.style.display = 'grid'; // This is set in CSS, but we need to ensure it's relative for absolute children
-            container.style.position = 'relative'; // Ensure container can anchor absolute tiles
+            container.innerHTML = '';
+            container.style.display = 'grid';
 
-            const tileElements = {}; // To store references to DOM elements for animation
-
-            // Calculate tile size based on container dimensions
-            const containerWidth = container.clientWidth;
-            const containerHeight = container.clientHeight;
-            // Assuming gap is 5px as per CSS, and padding is 5px on each side of container
-            const totalGapWidth = 5 * (GRID_SIZE - 1);
-            const totalPaddingWidth = 5 * 2;
-            const tileWidth = (containerWidth - totalGapWidth - totalPaddingWidth) / GRID_SIZE;
-            const tileHeight = (containerHeight - totalGapWidth - totalPaddingWidth) / GRID_SIZE;
-            const gap = 5; // as defined in CSS for .game-container gap
-
-            if (container.children.length === 0) { // Initial render
-                for (let r = 0; r < GRID_SIZE; r++) {
-                    for (let c = 0; c < GRID_SIZE; c++) {
-                        const tileValue = board[r][c];
-                        const tileElement = document.createElement('div');
-                        tileElement.classList.add('game-tile');
-                        tileElement.dataset.value = tileValue; // Store value for identification
-                        tileElement.dataset.row = r;
-                        tileElement.dataset.col = c;
-
-                        // Set initial position using transform
-                        const xPos = c * (tileWidth + gap) + gap; // Add initial gap for first column
-                        const yPos = r * (tileHeight + gap) + gap; // Add initial gap for first row
-                        tileElement.style.width = `${tileWidth}px`;
-                        tileElement.style.height = `${tileHeight}px`;
-                        tileElement.style.transform = `translate(${xPos}px, ${yPos}px)`;
-
-                        if (tileValue === 0) {
-                            tileElement.classList.add('blank');
-                            tileElements[`blank`] = tileElement; // Store blank tile separately
-                        } else {
-                            const img = document.createElement('img');
-                            img.src = `/static/split_images/${tileValue}.png`;
-                            img.alt = `Tile ${tileValue}`;
-                            tileElement.appendChild(img);
-                            tileElement.addEventListener('click', () => handleTileClick(parseInt(tileElement.dataset.row), parseInt(tileElement.dataset.col)));
-                            tileElements[`tile-${tileValue}`] = tileElement;
-                        }
-                        container.appendChild(tileElement);
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const tileValue = board[r][c];
+                    const tileElement = document.createElement('div');
+                    tileElement.classList.add('game-tile');
+                    if (tileValue === 0) {
+                        tileElement.classList.add('blank');
+                    } else {
+                        const img = document.createElement('img');
+                        img.src = `static/split_images/${tileValue}.png`;
+                        img.alt = `Tile ${tileValue}`;
+                        img.draggable = false;
+                        tileElement.appendChild(img);
+                        tileElement.addEventListener('click', () => handleTileClick(r, c));
                     }
-                }
-            } else { // Subsequent updates (after a move) - only update positions
-                for (let r = 0; r < GRID_SIZE; r++) {
-                    for (let c = 0; c < GRID_SIZE; c++) {
-                        const tileValue = board[r][c];
-                        let tileElement;
-                        if (tileValue === 0) {
-                            tileElement = container.querySelector(`.game-tile[data-value="0"]`);
-                             if (!tileElement) { // Should not happen if blank tile always exists
-                                console.error("Blank tile DOM element not found during update!");
-                                tileElement = container.querySelector(`.blank`); // Fallback
-                            }
-                        } else {
-                            tileElement = container.querySelector(`.game-tile[data-value="${tileValue}"]`);
-                        }
-
-                        if (tileElement) {
-                            const xPos = c * (tileWidth + gap) + gap;
-                            const yPos = r * (tileHeight + gap) + gap;
-                            tileElement.style.transform = `translate(${xPos}px, ${yPos}px)`;
-                            tileElement.dataset.row = r; // Update data attributes
-                            tileElement.dataset.col = c;
-
-                            // Ensure click listeners are correct, especially if we were to re-assign blank status
-                            if (tileValue !== 0 && !tileElement.onclick) {
-                                tileElement.addEventListener('click', () => handleTileClick(r,c));
-                            } else if (tileValue === 0 && tileElement.onclick) {
-                                tileElement.onclick = null; // Remove click from new blank
-                            }
-                        } else {
-                             console.error(`Tile element for value ${tileValue} not found during update! Board:`, board);
-                        }
-                    }
+                    container.appendChild(tileElement);
                 }
             }
-
             if (checkWinCondition()) {
-                displayWinMessage(container.parentElement);
+                displayWinMessage();
             }
         }
 
-        let isAnimating = false; // Flag to prevent multiple clicks during animation
-
         function handleTileClick(r, c) {
-            if (isAnimating) return; // Don't process clicks if animation is in progress
-
             const dr = Math.abs(r - blankPos.row);
             const dc = Math.abs(c - blankPos.col);
 
+            const gameContainer = document.querySelector('#game-of-15-placeholder .game-container');
+            if (!gameContainer) return;
+
             if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
-                isAnimating = true;
+                const clickedTileIndex = r * GRID_SIZE + c;
+                const clickedTileElement = gameContainer.children[clickedTileIndex];
 
-                const gameContainer = document.querySelector('#game-of-15-placeholder .game-container');
-                const clickedTileValue = board[r][c];
+                if (!clickedTileElement) return;
 
-                // Find DOM elements
-                const clickedTileElement = gameContainer.querySelector(`.game-tile[data-value="${clickedTileValue}"]`);
-                const blankTileElement = gameContainer.querySelector(`.game-tile.blank`);
+                const translateX = (blankPos.col - c) * 100;
+                const translateY = (blankPos.row - r) * 100;
 
-                if (!clickedTileElement || !blankTileElement) {
-                    console.error("Could not find tile elements for animation. Re-rendering.", clickedTileValue, blankPos);
-                    // Fallback to full re-render if elements are not found (should not happen)
+                clickedTileElement.style.transform = `translate(${translateX}%, ${translateY}%)`;
+                clickedTileElement.style.zIndex = '10';
+                gameContainer.style.pointerEvents = 'none';
+
+                setTimeout(() => {
                     board[blankPos.row][blankPos.col] = board[r][c];
                     board[r][c] = 0;
                     blankPos = { row: r, col: c };
                     renderBoard(gameContainer);
-                    isAnimating = false;
-                    return;
-                }
-
-                // Calculate new positions for transform
-                const tileWidth = clickedTileElement.offsetWidth;
-                const tileHeight = clickedTileElement.offsetHeight;
-                const gap = 5; // sync with CSS
-
-                const newClickedX = blankPos.col * (tileWidth + gap) + gap;
-                const newClickedY = blankPos.row * (tileHeight + gap) + gap;
-
-                const newBlankX = c * (tileWidth + gap) + gap;
-                const newBlankY = r * (tileHeight + gap) + gap;
-
-                // Apply transforms to animate
-                clickedTileElement.style.transform = `translate(${newClickedX}px, ${newClickedY}px)`;
-                blankTileElement.style.transform = `translate(${newBlankX}px, ${newBlankY}px)`;
-
-                // Update data attributes for position
-                const oldBlankRow = blankPos.row;
-                const oldBlankCol = blankPos.col;
-
-                // After animation, update the board array and data attributes
-                setTimeout(() => {
-                    // Update board array
-                    board[oldBlankRow][oldBlankCol] = clickedTileValue;
-                    board[r][c] = 0;
-
-                    // Update blankPos
-                    blankPos = { row: r, col: c };
-
-                    // Update data attributes and classes
-                    clickedTileElement.dataset.row = oldBlankRow;
-                    clickedTileElement.dataset.col = oldBlankCol;
-
-                    blankTileElement.dataset.row = r;
-                    blankTileElement.dataset.col = c;
-
-                    // Swap classes and click handlers (conceptually)
-                    // The blank tile becomes the image tile, the image tile becomes blank.
-                    // For simplicity with current renderBoard, we'll just re-render relevant parts or ensure data is fine
-                    // For now, the `renderBoard` on next click isn't called, so we must ensure state is correct
-                    // The `blank` class and `img` content effectively "move" with the logical tile
-                    // Let's ensure the DOM reflects the logical board for the next click's querySelector logic
-
-                    // The tile that *was* blank now gets the image and click listener
-                    blankTileElement.classList.remove('blank');
-                    const img = document.createElement('img');
-                    img.src = `/static/split_images/${clickedTileValue}.png`;
-                    img.alt = `Tile ${clickedTileValue}`;
-                    blankTileElement.innerHTML = ''; // Clear any old content
-                    blankTileElement.appendChild(img);
-                    blankTileElement.dataset.value = clickedTileValue; // It's no longer blank (value 0)
-                    blankTileElement.addEventListener('click', () => handleTileClick(oldBlankRow, oldBlankCol));
-
-
-                    // The tile that *was* clicked (and had an image) becomes blank
-                    clickedTileElement.classList.add('blank');
-                    clickedTileElement.innerHTML = ''; // Remove image
-                    clickedTileElement.dataset.value = 0; // It's now blank
-                    clickedTileElement.onclick = null; // Remove its click listener
-
-                    isAnimating = false;
-                    if (checkWinCondition()) {
-                         displayWinMessage(gameContainer.parentElement);
-                    }
-
-                }, 300); // Corresponds to CSS transition duration
+                    gameContainer.style.pointerEvents = 'auto';
+                }, 200);
             }
         }
+
 
         function checkWinCondition() {
             let current = 1;
             for (let r = 0; r < GRID_SIZE; r++) {
                 for (let c = 0; c < GRID_SIZE; c++) {
-                    if (r === GRID_SIZE - 1 && c === GRID_SIZE - 1) { // Last cell
-                        return board[r][c] === 0; // Should be blank
+                    if (r === GRID_SIZE - 1 && c === GRID_SIZE - 1) {
+                        return board[r][c] === 0;
                     }
                     if (board[r][c] !== current) {
                         return false;
@@ -520,18 +415,23 @@
                     current++;
                 }
             }
-            return true; // Should not be reached if blank is not last
+            return true;
         }
 
-        function displayWinMessage(pageElement) {
-            // Check if a win message already exists
-            if (pageElement.querySelector('.win-message')) return;
+        function displayWinMessage() {
+            // Find the game controls container
+            const gameControls = document.querySelector('.game-controls');
+            if (!gameControls) return;
+
+            // Check if a win message already exists to avoid duplicates
+            if (document.querySelector('.win-message')) return;
 
             const message = document.createElement('div');
-            message.className = 'win-message';
+            message.className = 'win-message text-4xl italic text-tan drop-shadow-lg';
             message.textContent = 'Congratulations! You solved it!';
-            pageElement.style.position = 'relative'; // Ensure pageElement can anchor the absolute message
-            pageElement.appendChild(message);
+
+            // Insert the message after the game controls container
+            gameControls.parentNode.insertBefore(message, gameControls.nextSibling);
         }
 
         function initializeGame() {
@@ -559,7 +459,6 @@
 
             wrapper.classList.remove('cursor-pointer');
 
-            // 1. Create a BLANK paper clone. It starts at the same size as the envelope.
             const letterClone = document.createElement('div');
             letterClone.className = 'letter-clone';
             letterClone.style.top = '0';
@@ -568,11 +467,9 @@
             letterClone.style.height = '100%';
             wrapper.appendChild(letterClone);
 
-            // 2. Animate the envelope opening.
             flapTop.classList.add('open');
             heart.classList.add('open');
 
-            // 3. After opening, make all original parts fall away.
             setTimeout(() => {
                 fallingParts.forEach(part => part.classList.add('fall'));
 
@@ -582,33 +479,30 @@
 
             }, 700);
 
-            // 4. After the fall, animate the size of the BLANK paper.
             setTimeout(() => {
-                const finalWidthRem = 80; // Target width in rem (32 * 2.5)
-                const finalHeightRem = 50; // Target height in rem (20 * 2.5)
+                const finalWidthRem = 80;
+                const finalHeightRem = 50;
                 const initialWidthRem = 32;
                 const initialHeightRem = 20;
 
                 letterClone.style.width = `${finalWidthRem}rem`;
                 letterClone.style.height = `${finalHeightRem}rem`;
-                // Adjust top/left to make it grow from the center
                 letterClone.style.top = `-${(finalHeightRem - initialHeightRem) / 2}rem`;
                 letterClone.style.left = `-${(finalWidthRem - initialWidthRem) / 2}rem`;
-            }, 2200); // 700ms (open) + 1500ms (fall)
+            }, 2200);
 
-            // 5. AFTER resizing, create and fade in the content.
             setTimeout(() => {
                 const contentWrapper = document.createElement('div');
                 contentWrapper.className = 'content-wrapper';
 
                 let pagesHTML = pageContents.map((content, index) => {
-                    // For the first page (game), we don't want the default paragraph styling
-                    if (index === 0) {
-                        return `<div class="page">${content}</div>`;
+                    if (index > 0) {
+                        return `<div class="page">
+                                    <p class="text-4xl italic text-tan drop-shadow-lg">${content}</p>
+                                </div>`;
                     }
-                    return `<div class="page">
-                                <p class="text-4xl italic text-tan drop-shadow-lg">${content}</p>
-                            </div>`;
+                    // For the game page, the content is already structured
+                    return `<div class="page">${content}</div>`;
                 }).join('');
 
                 contentWrapper.innerHTML = `
@@ -637,7 +531,6 @@
                         page.classList.remove('active', 'prev');
                         if (index === currentPage) {
                             page.classList.add('active');
-                            // Initialize game if it's the first page and not yet initialized
                             if (currentPage === 0 && !gameInitialized) {
                                 initializeGame();
                             }
@@ -647,6 +540,7 @@
                     });
                     pageIndicator.textContent = `${currentPage + 1} / ${pageContents.length}`;
                     prevButton.disabled = currentPage === 0;
+                    // --- REMOVED LOCK LOGIC ---
                     nextButton.disabled = currentPage === pageContents.length - 1;
                 }
 
@@ -666,8 +560,21 @@
                     }
                 });
 
+                const resetButton = document.getElementById('reset-btn');
+
+                if(resetButton) {
+                    resetButton.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const gameContainer = document.querySelector('#game-of-15-placeholder .game-container');
+                        const winMessage = document.querySelector('.win-message');
+                        if(winMessage) winMessage.remove();
+                        shuffleBoard();
+                        renderBoard(gameContainer);
+                    });
+                }
+
                 updatePaging(); // Initial setup
-            }, 3000); // 2200ms (resize start) + 800ms (resize duration)
+            }, 3000);
         });
     </script>
 
