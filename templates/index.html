@@ -251,6 +251,78 @@
             color: #FEFAE0;
         }
 
+        /* --- WORD SEARCH GAME STYLES --- */
+        #word-search-placeholder {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 1.5rem; /* Space between game and word slots */
+        }
+        .word-search-grid {
+            display: grid;
+            grid-template-columns: repeat(10, auto); /* 10 columns */
+            gap: 2px; /* Tiny gap between cells */
+            background-color: #D4A373; /* tan - border/bg color */
+            padding: 5px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .word-search-cell {
+            width: 2.5rem; /* Adjust size as needed */
+            height: 2.5rem; /* Adjust size as needed */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #FEFAE0; /* cream */
+            font-family: 'Arial', sans-serif; /* More readable font for letters */
+            font-size: 1.25rem; /* Adjust as needed */
+            color: #B85042; /* terracotta-red */
+            cursor: pointer;
+            user-select: none; /* Prevent text selection during drag */
+            transition: background-color 0.2s ease;
+        }
+        .word-search-cell.selected {
+            background-color: #CCD5AE; /* sage - for selection highlighting */
+        }
+        .word-search-cell.found {
+            background-color: #A9B489; /* darker sage - for permanently found words */
+            color: #FEFAE0; /* cream - for text on found cells */
+            /* Add a subtle animation or effect for found words if desired */
+        }
+        .word-slots-container {
+            display: flex;
+            justify-content: center;
+            gap: 1rem; /* Space between word slots */
+            margin-top: 1rem;
+        }
+        .word-slot {
+            background-color: #FEFAE0; /* cream */
+            border: 2px dashed #D4A373; /* tan */
+            border-radius: 6px;
+            padding: 0.5rem 1rem;
+            min-width: 60px; /* Minimum width for each slot */
+            height: 2.5rem; /* Match cell height or adjust */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Playfair Display', serif;
+            font-size: 1.25rem; /* Adjust as needed */
+            color: #D4A373; /* tan - for the placeholder or filled word */
+            text-align: center;
+            transition: all 0.5s ease-in-out;
+            overflow: hidden; /* For the filling animation */
+        }
+        .word-slot .slot-char {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            display: inline-block; /* Allows transform and delay */
+        }
+        .word-slot.filled .slot-char {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
     </style>
 </head>
 <body class="bg-peach font-serif antialiased overflow-hidden">
@@ -285,17 +357,316 @@
                     <button id="reset-btn" class="game-button">Reset</button>
                 </div>
             `,
-            "This is the second page, after the puzzle!",
+            `
+                <div class="text-center">
+                    <h3 class="text-2xl italic text-tan mb-4">what's our inside joke again?</h3>
+                    <div id="word-search-placeholder" class="mb-4"></div>
+                    <div class="flex justify-center space-x-4">
+                        <div class="word-slot" data-word="you"></div>
+                        <div class="word-slot" data-word="are"></div>
+                        <div class="word-slot" data-word="the"></div>
+                        <div class="word-slot" data-word="joke"></div>
+                    </div>
+                    <div id="ws-completion-message" class="text-2xl text-terracotta-red mt-4" style="display: none;"></div>
+                    <button id="ws-reset-btn" class="game-button mt-4" style="display: none;">Play Again?</button>
+                </div>
+            `,
             "More content can go here...",
             "And here as well.",
             "The final page."
         ];
         let currentPage = 0;
         let isOpen = false;
-        let gameInitialized = false;
+        let game15Initialized = false; // Renamed for clarity
+        let wordSearchInitialized = false;
+
+        // --- WORD SEARCH GAME LOGIC ---
+        const WS_GRID_SIZE = 10;
+        const wsWords = ["YOU", "ARE", "THE", "JOKE"]; // Words are uppercase for easier comparison
+        let wsGrid = [];
+        let wsFoundWords = [];
+        let wsIsSelecting = false;
+        let wsCurrentSelection = []; // Stores {row, col, element} of selected cells
+        let wsSelectionDirection = null; // Stores {dr, dc} for the current line selection
+
+        function generateWsGrid() {
+            wsGrid = Array(WS_GRID_SIZE).fill(null).map(() => Array(WS_GRID_SIZE).fill(''));
+            // TODO: Implement word placement logic
+            // TODO: Implement random letter filling
+        }
+
+        function canPlaceWord(word, row, col, dr, dc) {
+            for (let i = 0; i < word.length; i++) {
+                const r = row + i * dr;
+                const c = col + i * dc;
+                if (r < 0 || r >= WS_GRID_SIZE || c < 0 || c >= WS_GRID_SIZE) return false; // Out of bounds
+                if (wsGrid[r][c] !== '' && wsGrid[r][c] !== word[i]) return false; // Cell occupied by different letter
+            }
+            return true;
+        }
+
+        function placeWordInGrid(word) {
+            const directions = [
+                { dr: 0, dc: 1 },  // Horizontal
+                { dr: 1, dc: 0 },  // Vertical
+                { dr: 1, dc: 1 },  // Diagonal down-right
+                { dr: 1, dc: -1 }, // Diagonal down-left
+                // For more challenge, add reverse directions too
+                // { dr: 0, dc: -1 }, // Horizontal (reversed)
+                // { dr: -1, dc: 0 }, // Vertical (reversed)
+                // { dr: -1, dc: -1}, // Diagonal up-left (reversed)
+                // { dr: -1, dc: 1}   // Diagonal up-right (reversed)
+            ];
+            let placed = false;
+            let attemptsPerWord = 0; // Overall attempts for this word
+            const maxAttemptsPerWord = 100; // Prevent infinite loops for a single word
+
+            while(!placed && attemptsPerWord < maxAttemptsPerWord) {
+                attemptsPerWord++;
+                // Shuffle directions to try them in a random order
+                const shuffledDirections = [...directions].sort(() => Math.random() - 0.5);
+
+                for (const dir of shuffledDirections) {
+                    // Try a few random start positions for this direction
+                    let attemptsPerDirection = 0;
+                    const maxAttemptsPerDirection = 20; // Try 20 random starts for a direction
+
+                    while(attemptsPerDirection < maxAttemptsPerDirection) {
+                        attemptsPerDirection++;
+                        const row = Math.floor(Math.random() * WS_GRID_SIZE);
+                        const col = Math.floor(Math.random() * WS_GRID_SIZE);
+
+                        if (canPlaceWord(word, row, col, dir.dr, dir.dc)) {
+                            for (let i = 0; i < word.length; i++) {
+                                wsGrid[row + i * dir.dr][col + i * dir.dc] = word[i];
+                            }
+                            placed = true;
+                            break; // Exit direction loop
+                        }
+                    }
+                    if (placed) break; // Exit main placement loop if word is placed
+                }
+            }
+            if (!placed) {
+                console.error(`Could not place word: ${word} after ${maxAttemptsPerWord} attempts.`);
+                // Potentially handle this error, e.g., by stopping game generation or alerting user.
+                // For now, it will just leave the word out, and the grid might be incomplete.
+            }
+        }
+
+        function fillRandomLetters() {
+            const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            for (let r = 0; r < WS_GRID_SIZE; r++) {
+                for (let c = 0; c < WS_GRID_SIZE; c++) {
+                    if (wsGrid[r][c] === '') {
+                        wsGrid[r][c] = alphabet[Math.floor(Math.random() * alphabet.length)];
+                    }
+                }
+            }
+        }
+
+        function renderWsGrid(container) {
+            container.innerHTML = ''; // Clear previous grid
+            const gridElement = document.createElement('div');
+            gridElement.className = 'word-search-grid';
+
+            for (let r = 0; r < WS_GRID_SIZE; r++) {
+                for (let c = 0; c < WS_GRID_SIZE; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'word-search-cell';
+                    cell.textContent = wsGrid[r][c];
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+
+                    // Mouse events for selection
+                    cell.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        wsIsSelecting = true;
+                        wsSelectionDirection = null; // Reset direction on new selection
+                        wsCurrentSelection = [{ row: r, col: c, element: cell }];
+                        cell.classList.add('selected');
+                        // Clear any previous 'found' highlights if re-selecting over them
+                        // cell.classList.remove('found'); // Optional: if you want to allow re-selection of found words for a new attempt.
+                    });
+
+                    cell.addEventListener('mouseenter', () => {
+                        if (wsIsSelecting && wsCurrentSelection.length > 0) {
+                            const lastSelected = wsCurrentSelection[wsCurrentSelection.length - 1];
+                            const currentRow = parseInt(cell.dataset.row);
+                            const currentCol = parseInt(cell.dataset.col);
+
+                            // Prevent selecting the same cell again in the current drag
+                            if (lastSelected.row === currentRow && lastSelected.col === currentCol) return;
+
+                            // Check if this cell is already part of the current selection path (e.g. mousing back over)
+                            const alreadyInSelectionPath = wsCurrentSelection.find(s => s.row === currentRow && s.col === currentCol);
+
+                            if (wsCurrentSelection.length === 1) {
+                                // This is the second cell, determine direction
+                                const dr = Math.sign(currentRow - lastSelected.row);
+                                const dc = Math.sign(currentCol - lastSelected.col);
+                                // Allow only horizontal, vertical, or diagonal
+                                if (Math.abs(dr) <= 1 && Math.abs(dc) <= 1 && (dr !== 0 || dc !== 0)) {
+                                    wsSelectionDirection = { dr, dc };
+                                    if (!alreadyInSelectionPath) {
+                                        wsCurrentSelection.push({ row: currentRow, col: currentCol, element: cell });
+                                        cell.classList.add('selected');
+                                    }
+                                }
+                            } else if (wsSelectionDirection) {
+                                // Subsequent cells: must follow the established direction
+                                const expectedRow = lastSelected.row + wsSelectionDirection.dr;
+                                const expectedCol = lastSelected.col + wsSelectionDirection.dc;
+
+                                if (currentRow === expectedRow && currentCol === expectedCol) {
+                                    if (!alreadyInSelectionPath) {
+                                        wsCurrentSelection.push({ row: currentRow, col: currentCol, element: cell });
+                                        cell.classList.add('selected');
+                                    }
+                                } else {
+                                    // If user deviates, current behavior is to stop extending.
+                                    // Alternative: could try to "snap back" or reset selection. For now, just stops.
+                                }
+                            }
+                            // If mousing back over a path, remove cells from selection if not the last one.
+                            // This logic is tricky. For simplicity, current approach doesn't aggressively remove on mouse back.
+                            // User must release mouse to finalize selection or start a new one if they went wrong.
+                        }
+                    });
+                    gridElement.appendChild(cell);
+                }
+            }
+            container.appendChild(gridElement);
+
+            // Add mouseup listener to the document to handle ending selection
+            // Ensure this listener is added only once or managed properly if grid is re-rendered
+            const onMouseUp = () => {
+                if (wsIsSelecting) {
+                    wsIsSelecting = false;
+                    checkWsSelection();
+                    // Clear 'selected' class from all cells after check
+                    wsCurrentSelection.forEach(sel => sel.element.classList.remove('selected'));
+                    wsCurrentSelection = [];
+                }
+            };
+            // Remove existing listener to prevent duplicates if this function is called multiple times
+            document.removeEventListener('mouseup', onMouseUp);
+            document.addEventListener('mouseup', onMouseUp);
+        }
+
+        function checkWsSelection() {
+            if (wsCurrentSelection.length === 0) return;
+
+            // Simple check: get selected string
+            // More complex check would validate if selection is a straight/diagonal line
+            let selectedString = "";
+            wsCurrentSelection.forEach(s => selectedString += wsGrid[s.row][s.col]);
+
+            const foundWord = wsWords.find(word => word === selectedString || word === selectedString.split('').reverse().join(''));
+
+            if (foundWord && !wsFoundWords.includes(foundWord)) {
+                wsFoundWords.push(foundWord);
+                wsCurrentSelection.forEach(sel => {
+                    sel.element.classList.add('found');
+                    // Make found cells non-interactive for new selections if desired
+                    // sel.element.style.pointerEvents = 'none'; // Example
+                });
+                animateWordSlot(foundWord);
+                if (wsFoundWords.length === wsWords.length) {
+                    const completionMessage = document.getElementById('ws-completion-message');
+                    const wsResetButton = document.getElementById('ws-reset-btn');
+                    if (completionMessage) {
+                        completionMessage.textContent = "Congratulations! You found all the words!";
+                        completionMessage.style.display = 'block';
+                    }
+                    if (wsResetButton) {
+                        wsResetButton.style.display = 'inline-block';
+                    }
+                    const gridElement = document.querySelector('#word-search-placeholder .word-search-grid');
+                    if (gridElement) {
+                        gridElement.style.pointerEvents = 'none'; // Disable further interaction
+                    }
+                }
+            }
+        }
+
+        function resetWsGame() {
+            wsFoundWords = [];
+            wsCurrentSelection = [];
+            wsSelectionDirection = null;
+
+            const gridContainer = document.getElementById('word-search-placeholder');
+            const cells = gridContainer.querySelectorAll('.word-search-cell');
+            cells.forEach(cell => {
+                cell.classList.remove('found', 'selected');
+                cell.style.pointerEvents = 'auto'; // Ensure cells are interactive again
+            });
+
+            const slots = document.querySelectorAll('.word-slot');
+            slots.forEach(slot => {
+                slot.innerHTML = ''; // Clear text
+                slot.classList.remove('filled');
+            });
+
+            const completionMessage = document.getElementById('ws-completion-message');
+            const wsResetButton = document.getElementById('ws-reset-btn');
+            if (completionMessage) completionMessage.style.display = 'none';
+            if (wsResetButton) wsResetButton.style.display = 'none';
+
+            // Re-generate and render the grid for a full shuffle
+            // This makes the "Play Again" more meaningful
+            generateWsGrid();
+            wsWords.forEach(word => placeWordInGrid(word.toUpperCase()));
+            fillRandomLetters();
+            renderWsGrid(gridContainer); // This function re-creates the grid element
+
+            // After renderWsGrid, the grid element is new, so re-query and set pointerEvents
+            const newGridElement = gridContainer.querySelector('.word-search-grid');
+            if (newGridElement) {
+                 newGridElement.style.pointerEvents = 'auto';
+            }
+        }
+
+        function animateWordSlot(word) {
+            const slot = document.querySelector(`.word-slot[data-word="${word.toLowerCase()}"]`);
+            if (slot) {
+                slot.innerHTML = ''; // Clear if there was any placeholder text
+                word.split('').forEach((char, index) => {
+                    const span = document.createElement('span');
+                    span.className = 'slot-char';
+                    span.textContent = char;
+                    span.style.transitionDelay = `${index * 0.05}s`; // Stagger animation
+                    slot.appendChild(span);
+                });
+                slot.classList.add('filled'); // Trigger animation
+            }
+        }
+
+
+        function initializeWordSearchGame() {
+            if (wordSearchInitialized) return;
+            const placeholder = document.getElementById('word-search-placeholder');
+            if (!placeholder) {
+                console.error("Word search placeholder not found!");
+                return;
+            }
+            generateWsGrid(); // Placeholder for now
+            wsWords.forEach(word => placeWordInGrid(word.toUpperCase()));
+            fillRandomLetters();
+            renderWsGrid(placeholder);
+
+            const wsResetButton = document.getElementById('ws-reset-btn');
+            if (wsResetButton) {
+                // Ensure listener isn't added multiple times if init is somehow called again
+                wsResetButton.removeEventListener('click', resetWsGame);
+                wsResetButton.addEventListener('click', resetWsGame);
+            }
+            wordSearchInitialized = true;
+        }
+
 
         // --- GAME OF 15 LOGIC ---
-        const GRID_SIZE = 4;
+        const GAME_15_GRID_SIZE = 4; // Changed to avoid conflict
         let board = [];
         let blankPos = { row: -1, col: -1 };
 
@@ -314,9 +685,62 @@
 
         function isSolvable(tiles, blankRow) {
             const inversions = countInversions(tiles);
-            const blankRowFromBottom = GRID_SIZE - blankRow;
-            if (inversions % 2 !== 0) {
-                return blankRowFromBottom % 2 === 0;
+            // Correctly use GAME_15_GRID_SIZE
+            if (GAME_15_GRID_SIZE % 2 === 1) { // Odd grid width
+                return inversions % 2 === 0;
+            } else { // Even grid width
+                const blankRowFromBottom = GAME_15_GRID_SIZE - blankRow; // 0-indexed row from bottom
+                if ((blankRowFromBottom + 1) % 2 === 0) { // Blank on an even row from bottom (1-indexed)
+                    return inversions % 2 === 1;
+                } else { // Blank on an odd row from bottom (1-indexed)
+                    return inversions % 2 === 0;
+                }
+            }
+        }
+
+        function shuffleBoard() {
+            let tiles = Array.from({ length: GAME_15_GRID_SIZE * GAME_15_GRID_SIZE - 1 }, (_, i) => i + 1);
+            tiles.push(0); // 0 represents the blank tile
+
+            let maxAttempts = 100; // Prevent infinite loop
+            let attempt = 0;
+            do {
+                // Fisher-Yates shuffle
+                for (let i = tiles.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+                }
+                const blankIndex = tiles.indexOf(0);
+                // Correctly use GAME_15_GRID_SIZE
+                blankPos = { row: Math.floor(blankIndex / GAME_15_GRID_SIZE), col: blankIndex % GAME_15_GRID_SIZE };
+                attempt++;
+            } while (!isSolvable(tiles, blankPos.row) && attempt < maxAttempts);
+
+            if(attempt >= maxAttempts) {
+                console.warn("Could not generate a solvable Game of 15 board. Using last shuffle.");
+                // Fallback: just use the last shuffle. It might be solvable by chance or user can reset.
+                // Or, could implement a known solvable shuffle here.
+            }
+
+            board = [];
+            for (let i = 0; i < GAME_15_GRID_SIZE; i++) {
+                // Correctly use GAME_15_GRID_SIZE
+                board.push(tiles.slice(i * GAME_15_GRID_SIZE, (i + 1) * GAME_15_GRID_SIZE));
+            }
+            // blankPos is already set correctly from the loop
+        }
+
+
+        function renderBoard(container) {
+            container.innerHTML = '';
+            // container.style.display = 'grid'; // Already set by .game-container
+            // The grid-template-columns and rows are set by .game-container css
+
+            for (let r = 0; r < GAME_15_GRID_SIZE; r++) {
+                for (let c = 0; c < GAME_15_GRID_SIZE; c++) { // Correctly use GAME_15_GRID_SIZE
+                    const tileValue = board[r][c];
+                    const tileElement = document.createElement('div');
+                    tileElement.classList.add('game-tile');
             } else {
                 return blankRowFromBottom % 2 !== 0;
             }
@@ -434,11 +858,11 @@
             gameControls.parentNode.insertBefore(message, gameControls.nextSibling);
         }
 
-        function initializeGame() {
-            if (gameInitialized) return;
+        function initializeGame15() { // Renamed
+            if (game15Initialized) return; // Renamed
             const placeholder = document.getElementById('game-of-15-placeholder');
             if (!placeholder) {
-                console.error("Game placeholder not found!");
+                console.error("Game 15 placeholder not found!"); // Clarified
                 return;
             }
 
@@ -446,9 +870,9 @@
             gameContainer.className = 'game-container';
             placeholder.appendChild(gameContainer);
 
-            shuffleBoard();
-            renderBoard(gameContainer);
-            gameInitialized = true;
+            shuffleBoard(); // Assumes this uses GAME_15_GRID_SIZE correctly
+            renderBoard(gameContainer); // Assumes this uses GAME_15_GRID_SIZE correctly
+            game15Initialized = true; // Renamed
         }
         // --- END GAME OF 15 LOGIC ---
 
@@ -531,8 +955,10 @@
                         page.classList.remove('active', 'prev');
                         if (index === currentPage) {
                             page.classList.add('active');
-                            if (currentPage === 0 && !gameInitialized) {
-                                initializeGame();
+                            if (currentPage === 0 && !game15Initialized) { // Game 15 on page 0
+                                initializeGame15();
+                            } else if (currentPage === 1 && !wordSearchInitialized) { // Word Search on page 1
+                                initializeWordSearchGame();
                             }
                         } else if (index < currentPage) {
                             page.classList.add('prev');
