@@ -94,7 +94,7 @@
         }
 
         /* This is the paper that stays behind and animates its size */
-        .letter-clone {
+        .letter {
             position: absolute;
             background-color: #FEFAE0; /* cream */
             border-radius: 12px;
@@ -459,13 +459,13 @@
 
             wrapper.classList.remove('cursor-pointer');
 
-            const letterClone = document.createElement('div');
-            letterClone.className = 'letter-clone';
-            letterClone.style.top = '0';
-            letterClone.style.left = '0';
-            letterClone.style.width = '100%';
-            letterClone.style.height = '100%';
-            wrapper.appendChild(letterClone);
+            const letter = document.createElement('div');
+            letter.className = 'letter';
+            letter.style.top = '0';
+            letter.style.left = '0';
+            letter.style.width = '100%';
+            letter.style.height = '100%';
+            wrapper.appendChild(letter);
 
             flapTop.classList.add('open');
             heart.classList.add('open');
@@ -485,10 +485,10 @@
                 const initialWidthRem = 32;
                 const initialHeightRem = 20;
 
-                letterClone.style.width = `${finalWidthRem}rem`;
-                letterClone.style.height = `${finalHeightRem}rem`;
-                letterClone.style.top = `-${(finalHeightRem - initialHeightRem) / 2}rem`;
-                letterClone.style.left = `-${(finalWidthRem - initialWidthRem) / 2}rem`;
+                letter.style.width = `${finalWidthRem}rem`;
+                letter.style.height = `${finalHeightRem}rem`;
+                letter.style.top = `-${(finalHeightRem - initialHeightRem) / 2}rem`;
+                letter.style.left = `-${(finalWidthRem - initialWidthRem) / 2}rem`;
             }, 2200);
 
             setTimeout(() => {
@@ -518,13 +518,13 @@
                     </div>
                 `;
 
-                letterClone.appendChild(contentWrapper);
+                letter.appendChild(contentWrapper);
                 setTimeout(() => contentWrapper.classList.add('visible'), 50);
 
                 const prevButton = document.getElementById('prev-btn');
                 const nextButton = document.getElementById('next-btn');
                 const pageIndicator = document.getElementById('page-indicator');
-                const pages = letterClone.querySelectorAll('.page');
+                const pages = letter.querySelectorAll('.page');
 
                 function updatePaging() {
                     pages.forEach((page, index) => {
