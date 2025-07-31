@@ -273,18 +273,21 @@
         const fallingParts = Array.from(document.querySelectorAll('.envelope-part'));
 
         const pageContents = [
-             // --- MODIFIED GAME PAGE STRUCTURE ---
+            `Hello Maryam`,
+            `Im really sorry karena akhir akhir ini gw keliatan kayak underestimate your feelings when youre sick.`,
+            `I admit that i was being a jerk and i should have been more supportive`,
+            `what i wanted to say was that you are a strong person dan gw yakin kondisi lu bakal cepet membaik`,
+            `for now let's wish for all the best`,
+            `I hope you can accept my apology`,
+            `I miss you vro, and i hope to see you soon`,
+            `get well soon maar`,
             `
-                <h2 class="game-title">LOBSTAR!!!</h2>
-                <div id='game-of-15-placeholder'></div>
-                <div class="game-controls">
-                    <button id="reset-btn" class="game-button">Reset</button>
-                </div>
-            `,
-            "This is the second page, after the puzzle!",
-            "More content can go here...",
-            "And here as well.",
-            "The final page."
+        <h2 class="game-title">GET WELL SOON!!!</h2>
+        <div id='game-of-15-placeholder'></div>
+        <div class="game-controls">
+            <button id="reset-btn" class="game-button">Reset</button>
+        </div>
+    `
         ];
         let currentPage = 0;
         let isOpen = false;
@@ -492,13 +495,14 @@
                 contentWrapper.className = 'content-wrapper';
 
                 let pagesHTML = pageContents.map((content, index) => {
-                    if (index > 0) {
-                        return `<div class="page">
-                                    <p class="text-4xl italic text-tan drop-shadow-lg">${content}</p>
-                                </div>`;
+                    // Halaman terakhir (game) langsung render HTML
+                    if (index === pageContents.length - 1) {
+                        return `<div class="page">${content}</div>`;
                     }
-                    // For the game page, the content is already structured
-                    return `<div class="page">${content}</div>`;
+                    // Semua halaman lain dibungkus style
+                    return `<div class="page">
+                                <p class="text-4xl italic text-tan drop-shadow-lg">${content}</p>
+                            </div>`;
                 }).join('');
 
                 contentWrapper.innerHTML = `

@@ -67,7 +67,7 @@ if __name__ == "__main__":
     # If the image is not in the same directory as the script, provide the full path.
     # For example: 'C:/Users/YourUser/Pictures/my_photo.jpg' on Windows
     # or '/home/user/images/my_photo.png' on Linux/macOS.
-    input_image = 'lobstar.jpg'  # Path to the input image file
+    input_image = 'yellow_guy.png'  # Path to the input image file
 
     # You can change the name of the output folder if you like
     output_directory = 'split_images'
