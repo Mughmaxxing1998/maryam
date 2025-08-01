@@ -576,6 +576,10 @@
                 updatePaging(); // Initial setup
             }, 3000);
         });
+
+        if (/Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 600) {
+            alert("This website is not working properly on mobile devices");
+        }
     </script>
 
 </body>
