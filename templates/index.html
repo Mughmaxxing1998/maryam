@@ -252,6 +252,18 @@
 </head>
 <body class="bg-peach font-serif antialiased overflow-hidden">
 
+    <script>
+        if (/Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 600) {
+            document.body.innerHTML = `
+                <div class="min-h-screen flex items-center justify-center bg-peach">
+                    <div class="text-center">
+                        <h1 class="text-4xl font-serif italic text-tan mb-6 drop-shadow-lg">Sorry!</h1>
+                        <p class="text-2xl text-tan font-serif">This website is not available on mobile devices.<br>Please use a desktop or tablet for the best experience.</p>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
     <div class="min-h-screen flex items-center justify-center">
         <div id="envelope-wrapper" class="envelope-wrapper cursor-pointer">
             <div id="envelope-back" class="envelope-part envelope-back"></div>
